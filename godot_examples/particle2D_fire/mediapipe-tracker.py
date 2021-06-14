@@ -16,6 +16,13 @@ dist = hand_dev.add_signal(mpr.DIR_OUT, "index-thumb-distance", 1,
 position = hand_dev.add_signal(mpr.DIR_OUT, "position", 2,
                            mpr.FLT, None, None, None)
 
+thumb = hand_dev.add_signal(mpr.DIR_OUT, "thumb", 2,
+                            mpr.FLT, None, None, None)
+
+
+index = hand_dev.add_signal(mpr.DIR_OUT, "index", 2,
+                            mpr.FLT, None, None, None)
+
 # Begin webcam input for hand tracking:
 hands = mp_hands.Hands(min_detection_confidence=0.7,
                        min_tracking_confidence=0.5)
@@ -64,8 +71,12 @@ while cap.isOpened():
             # Set position signal with midpoint between thumb and index
             position.set_value([(hand_landmarks.landmark[8].x + hand_landmarks.landmark[4].x)/2, (hand_landmarks.landmark[8].y + hand_landmarks.landmark[4].y)/2])
 
-            # Update signal with value calculated above
-            dist.set_value(distance)
+            # TODO: Use convergent maps for determining distance using the position of index-tip and thumb-tip.
+            index.set_value([hand_landmarks.landmark[8].x,
+                             hand_landmarks.landmark[8].y])
+
+            thumb.set_value([hand_landmarks.landmark[4].x,
+                             hand_landmarks.landmark[4].y])
 
             # Draw skeletal structure over video
             mp_drawing.draw_landmarks(
