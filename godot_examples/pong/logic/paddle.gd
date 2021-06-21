@@ -6,14 +6,12 @@ var _ball_dir
 var _up
 var _down
 var dev = gdMprDevice.new()
+onready var Pong = get_node(".")
 
 onready var _screen_size_y = get_viewport_rect().size.y
 
 # Called when the node enters the scene tree for the first time.
 func _ready():
-	dev.init("player_control")
-	dev.add_sig(gdMprDevice.INCOMING, "player", 1, gdMprDevice.INT32)
-	dev.set_value_int("player", 0)
 	
 	var n = name.to_lower()
 	_up = n + "_move_up"
@@ -25,10 +23,8 @@ func _ready():
 
 
 func _process(delta):
-	dev.poll()
 	# Move up and down based on input.
-	var input = dev.get_value_int("player")
-	position.y = clamp(position.y + input * MOVE_SPEED * delta, 16, _screen_size_y - 16)
+	pass
 
 
 func _on_area_entered(area):
