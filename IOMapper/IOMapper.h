@@ -1,12 +1,15 @@
 /* IOMapper.h */
 
-#ifndef GDMPR_DEVICE_H
-#define GDMPR_DEVICE_H
+#ifndef IOMAPPER_H
+#define IOMAPPER_H
 
 #include "core/reference.h"
 #include "core/func_ref.h"
 #include "core/variant.h"
+#include "core/engine.h"
+#include "scene/main/node.h"
 #include <mapper_cpp.h>
+
 
 
 class IOMapper : public Reference {
@@ -70,10 +73,46 @@ class IOMapper : public Reference {
             VERSION             = (int)mapper::Property::VERSION,
         };
 
-        mapper::Device* dev;
-        std::vector<mapper::Signal> signals;
+        class Signal : public Reference {
+        GDCLASS(Signal, Reference);
 
-        
+        protected:
+            // Required for binding methods to godot 
+            static void _bind_methods();
+
+        public:
+            mapper::Signal sig;
+
+            // Set/get property method headers
+            void set_property_int(Property property, int value);
+            void set_property_float(Property property, float value);
+            void set_property_double(Property property, double value);
+            int32_t get_property_int(Property property);
+            float get_property_float(Property property);
+            double get_property_double(Property property);
+
+            void set_bounds(float min, float max);
+
+            // Godot method binding fails when using templates, method overloading, or copying into Variant type.
+            void set_value(Variant var, int id);
+
+            int32_t get_value_int(int id);
+            float get_value_float(int id);
+            double get_value_double(int id);
+            Vector2 get_value_vector2(int id);
+            Vector3 get_value_vector3(int id);
+
+            void reserve_instances(int num_reservations);
+
+            bool is_active(int id);
+
+            Signal(mapper::Signal signal);
+            Signal();
+            ~Signal();
+
+        };
+
+        mapper::Device* dev;
         
         // Method headers go here
 
@@ -83,42 +122,18 @@ class IOMapper : public Reference {
         bool ready();
 
         // Optional fields have been omitted for now
-        void add_sig(Direction direction, String name, int length, Type type);
-        mapper::Signal sig_get(String name);
-        void set_bounds(String sigName, int min, int max);
-
-        // Set/get property method headers
-        void set_property_int(String sigName, Property property, int value);
-        void set_property_float(String sigName, Property property, float value);
-        void set_property_double(String sigName, Property property, double value);
-        int32_t get_property_int(String sigName, Property property);
-        float get_property_float(String sigName, Property property);
-        double get_property_double(String sigName, Property property);
-
-        // Godot method binding fails when using templates, method overridding, or copying into Variant type.
-        void set_value_int(String signalName, int32_t value);
-        void set_value_float(String signalName, float value);
-        void set_value_double(String signalName, double value);
-        void set_value_vector2(String signalName, Vector2 values);
-        void set_value_vector3(String signalName, Vector3 values);
-
-
-        int32_t get_value_int(String signalName);
-        float get_value_float(String signalName);
-        double get_value_double(String signalName);
-        Vector2 get_value_vector2(String signalName);
-        Vector3 get_value_vector3(String signalName);
-
-            
-
+        Ref<IOMapper::Signal> add_sig(Direction direction, String name, int length, Type type); 
+    
         IOMapper();
         ~IOMapper();
 
-
 };
+
+
+
 
 VARIANT_ENUM_CAST(IOMapper::Direction);
 VARIANT_ENUM_CAST(IOMapper::Type);
 VARIANT_ENUM_CAST(IOMapper::Property);
 
-#endif // GDMPR_DEVICE_H
+#endif // IOMAPPER_H

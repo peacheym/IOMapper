@@ -11,172 +11,151 @@ IOMapper::~IOMapper() {
     delete dev;
 }
 
+IOMapper::Signal::Signal(mapper::Signal signal) {
+    sig = signal;
+}
+
+IOMapper::Signal::Signal() {
+
+}
+
+IOMapper::Signal::~Signal() {
+
+}
+
 // Must be called to initialize device
 void IOMapper::init(String name) {
     dev = new mapper::Device(name.ascii().get_data());
 }
 
-// Called on the device to add a signal
-void IOMapper::add_sig(Direction dir, String name, int length, Type type) {
-    
-    mapper::Signal sig = dev->add_signal((mapper::Direction)dir, name.ascii().get_data(),
-                                         length, (mapper::Type)type);
-    signals.emplace_back(sig);
-}
+Ref<IOMapper::Signal> IOMapper::add_sig(Direction direction, String name, int length, Type type){
 
-// Helper method for retrieving signal by name
-mapper::Signal IOMapper::sig_get(String name) {
+    mapper::Signal sig = dev->add_signal((mapper::Direction)direction, name.ascii().get_data(),
+                                    length, (mapper::Type)type);
 
-    for (int i = 0; i < (int)signals.size(); i++ ) {
-        std::string prop_name = signals[i].property("name");
-        if (prop_name == name.ascii().get_data()) {
-            return signals[i];
-        }
-    }
-    std::cerr << "Signal not found: Value not set" << std::endl;
-    return NULL;
+    return memnew(IOMapper::Signal(sig)); 
 }
 
 
 // Methods for setting signal properties
-void IOMapper::set_property_int(String sigName, Property property, int value) {
-    sig_get(sigName).set_property((mapper::Property)property, value);
+void IOMapper::Signal::set_property_int(Property property, int value) {
+    sig.set_property((mapper::Property)property, value);
 }
-void IOMapper::set_property_float(String sigName, Property property, float value) {
-    sig_get(sigName).set_property((mapper::Property)property, value);
+void IOMapper::Signal::set_property_float(Property property, float value) {
+    sig.set_property((mapper::Property)property, value);
 }
-void IOMapper::set_property_double(String sigName, Property property, double value) {
-    sig_get(sigName).set_property((mapper::Property)property, value);
+void IOMapper::Signal::set_property_double(Property property, double value) {
+    sig.set_property((mapper::Property)property, value);
+}
+
+void IOMapper::Signal::set_bounds(float min, float max) {
+    sig.set_property(mapper::Property::MIN, min);
+    sig.set_property(mapper::Property::MAX, max);
 }
 
 // Methods for getting signal properties
-int32_t IOMapper::get_property_int(String sigName, Property property) {
-    return (int32_t)sig_get(sigName).property((mapper::Property)property);
+int32_t IOMapper::Signal::get_property_int(Property property) {
+    return (int32_t)sig.property((mapper::Property)property);
 }
-float IOMapper::get_property_float(String sigName, Property property) {
-    return (float)sig_get(sigName).property((mapper::Property)property);
+float IOMapper::Signal::get_property_float(Property property) {
+    return (float)sig.property((mapper::Property)property);
 }
-double IOMapper::get_property_double(String sigName, Property property) {
-    return (double)sig_get(sigName).property((mapper::Property)property);
+double IOMapper::Signal::get_property_double(Property property) {
+    return (double)sig.property((mapper::Property)property);
+}
+
+
+void IOMapper::Signal::set_value(Variant var, int id) {
+  // Catch-all method adapted from code by Michel Seta 
+  // at https://gitlab.com/polymorphcool/gosc/-/blob/master/OSCsender.cpp#L64
+
+  switch (var.get_type()) {
+    case Variant::Type::INT: {
+        int i = var;
+        sig.instance(id).set_value(i);
+    } break;
+    case Variant::Type::REAL: {
+        float f = var;
+        sig.instance(id).set_value(f);
+    } break;
+    case Variant::Type::VECTOR2: {
+        Vector2 v = var;
+        if ((int)sig.property(mapper::Property::LENGTH) >= 2) {
+            float sig_vector[2] = {v[0], v[1]};
+            sig.instance(id).set_value(sig_vector, 2);
+        }
+    } break;
+    case Variant::Type::VECTOR3: {
+        Vector3 v = var;
+        if ((int)sig.property(mapper::Property::LENGTH) >= 2) {
+            float sig_vector[3] = {v[0], v[1], v[2]};
+            sig.instance(id).set_value(sig_vector, 3);
+        }
+    } break;
+    case Variant::Type::QUAT: {
+        Quat q = var;
+        if ((int)sig.property(mapper::Property::LENGTH) >= 2) {
+            float sig_vector[4] = {q.w, q.x, q.y, q.z};
+            sig.instance(id).set_value(sig_vector, 4);
+        }
+    } break;
+    default:
+        std::cout << __FILE__ << "::" << __FUNCTION__ << " - bad data" << std::endl;
+        break;
+  }
 }
 
 
-// Signal value set functions
-void IOMapper::set_value_float(String signalName, float value) {
-    sig_get(signalName).set_value(value);
+// Signal value retrieval methods
+int32_t IOMapper::Signal::get_value_int(int id) {
+    int32_t *value = (int32_t*)sig.instance(id).value();
+    return value ? *value : 0;
 }
 
-void IOMapper::set_value_int(String signalName, int32_t value) {
-    sig_get(signalName).set_value(value);
+float IOMapper::Signal::get_value_float(int id) {
+    float *value = (float*)sig.instance(id).value();
+    return value ? *value : 0.0;
 }
 
-void IOMapper::set_value_double(String signalName, double value) {
-    sig_get(signalName).set_value(value);
+double IOMapper::Signal::get_value_double(int id) {
+    double *value = (double*)sig.instance(id).value();
+    return value ? *value : 0.0;
 }
 
-void IOMapper::set_value_vector2(String signalName, Vector2 values) {
-    if (sig_get(signalName).property(mapper::Property::LENGTH) == 2) {
-        float sig_vector[2];
 
-        sig_vector[0] = values[0];
-        sig_vector[1] = values[1];
-        sig_get(signalName).set_value(sig_vector, 2);
-        return;
+Vector2 IOMapper::Signal::get_value_vector2(int id) {
+
+    // Only attempt to copy array if signal length >= 2
+    if ((int)sig.property(mapper::Property::LENGTH) >= 2) {
+        float *value = (float*)sig.instance(id).value();
+        return value ? Vector2(value[0], value[1]) : Vector2(0, 0);
     }
 
-    std::cerr << "Vector2 set method was called on signal not of length 2" << std::endl;
-    return;
+    std::cerr << "Vector2 get method was called on signal with length < 2" << std::endl;
+    return Vector2(0, 0);
 }
 
-void IOMapper::set_value_vector3(String signalName, Vector3 values) {
-    if (sig_get(signalName).property(mapper::Property::LENGTH) == 3) {
-        float sig_vector[3];
+Vector3 IOMapper::Signal::get_value_vector3(int id) {
 
-        sig_vector[0] = values[0];
-        sig_vector[1] = values[1];
-        sig_vector[2] = values[2];
-        sig_get(signalName).set_value(sig_vector, 3);
-    
-        return;
+    // Only attempt to copy array if signal length is >= 3
+    if ((int)sig.property(mapper::Property::LENGTH) >= 3) {
+        float *value = (float*)sig.instance(id).value();
+        return value ? Vector3(value[0], value[1], value[2]) : Vector3(0, 0, 0);
     }
 
-    std::cerr << "Vector3 set method was called on signal not of length 3" << std::endl;
-    return;
+    std::cerr << "Vector3 get method was called on signal with length < 3" << std::endl;
+    return Vector3(0, 0, 0);
 }
 
 
 
-
-// Signal value get functions
-int32_t IOMapper::get_value_int(String signalName) {
-    int32_t value; 
-    mapper::Signal sig = sig_get(signalName);
-    memcpy(&value, sig.value(), sizeof(sig.value()));
-
-    return value;
+void IOMapper::Signal::reserve_instances(int num_reservations) {
+    sig.reserve_instances(num_reservations);
 }
 
-float IOMapper::get_value_float(String signalName) {
-    float value;
-    mapper::Signal sig = sig_get(signalName);
-    memcpy(&value, sig.value(), sizeof(sig.value()));
-
-    return value;
+bool IOMapper::Signal::is_active(int id) {
+    return sig.instance(id).is_active();
 }
-
-double IOMapper::get_value_double(String signalName) {
-    double value;
-    mapper::Signal sig = sig_get(signalName);
-    memcpy(&value, sig.value(), sizeof(sig.value()));
-
-    return value;
-}
-
-Vector2 IOMapper::get_value_vector2(String signalName) {
-    Vector2 godot_vector;
-    mapper::Signal sig = sig_get(signalName);
-
-    // Only attempt to copy array if signal length is 2
-    if (sig.property(mapper::Property::LENGTH) == 2) {
-        float array[2]; 
-    
-        memcpy(&array, sig.value(), sizeof(float)*2);
-    
-
-        godot_vector.x = array[0];
-        godot_vector.y = array[1];
-
-        return godot_vector;
-    }
-
-    std::cerr << "Vector2 get method was called on signal not of length 2" << std::endl;
-    return Vector2(MAXFLOAT, MAXFLOAT);    
-}
-
-Vector3 IOMapper::get_value_vector3(String signalName) {
-    Vector3 godot_vector;
-    mapper::Signal sig = sig_get(signalName);
-
-    // Only attempt to copy array if signal length is 3
-    if (sig.property(mapper::Property::LENGTH) == 3) {
-        float array[3]; 
-        memcpy(&array, sig.value(), sizeof(float)*3);
-        
-
-        godot_vector.x = array[0];
-        godot_vector.y = array[1];
-        godot_vector.z = array[2];
-
-        return godot_vector;
-    }
-
-    std::cerr << "Vector3 get method was called on signal not of length 3" << std::endl;
-    return Vector3(MAXFLOAT, MAXFLOAT, MAXFLOAT);  
-}
-
-
-
-
 
 int IOMapper::poll_blocking(int block_ms) {
     return dev->poll(block_ms);
@@ -190,6 +169,25 @@ bool IOMapper::ready() {
     return dev->ready();
 }
 
+void IOMapper::Signal::_bind_methods(){
+
+    ClassDB::bind_method(D_METHOD("set_property_int","property", "value"), &IOMapper::Signal::set_property_int);
+    ClassDB::bind_method(D_METHOD("set_property_float","property", "value"), &IOMapper::Signal::set_property_float);
+    ClassDB::bind_method(D_METHOD("set_property_double","property", "value"), &IOMapper::Signal::set_property_double);
+    ClassDB::bind_method(D_METHOD("get_property_int","property"), &IOMapper::Signal::get_property_int);
+    ClassDB::bind_method(D_METHOD("get_property_float","property"), &IOMapper::Signal::get_property_float);
+    ClassDB::bind_method(D_METHOD("get_property_double","property"), &IOMapper::Signal::get_property_double);
+    ClassDB::bind_method(D_METHOD("set_bounds","min", "max"), &IOMapper::Signal::set_bounds);
+    ClassDB::bind_method(D_METHOD("set_value","id"), &IOMapper::Signal::set_value, DEFVAL(0), DEFVAL(0));
+    ClassDB::bind_method(D_METHOD("get_value_int","id"), &IOMapper::Signal::get_value_int, DEFVAL(0));
+    ClassDB::bind_method(D_METHOD("get_value_float","id"), &IOMapper::Signal::get_value_float, DEFVAL(0));
+    ClassDB::bind_method(D_METHOD("get_value_double","id"), &IOMapper::Signal::get_value_double, DEFVAL(0));
+    ClassDB::bind_method(D_METHOD("get_value_vector2","id"), &IOMapper::Signal::get_value_vector2, DEFVAL(0));
+    ClassDB::bind_method(D_METHOD("get_value_vector3","id"), &IOMapper::Signal::get_value_vector3, DEFVAL(0));
+    ClassDB::bind_method(D_METHOD("reserve_instances","num_reservations"), &IOMapper::Signal::reserve_instances);
+    ClassDB::bind_method(D_METHOD("is_active","id"), &IOMapper::Signal::is_active);
+
+}
 
 // Bind methods from above:
 void IOMapper::_bind_methods() {
@@ -199,22 +197,7 @@ void IOMapper::_bind_methods() {
     ClassDB::bind_method(D_METHOD("ready"), &IOMapper::ready);
     ClassDB::bind_method(D_METHOD("init", "name"), &IOMapper::init);
     ClassDB::bind_method(D_METHOD("add_sig", "direction", "name", "length", "type"), &IOMapper::add_sig);
-    ClassDB::bind_method(D_METHOD("set_property_int", "signalName", "property", "value"), &IOMapper::set_property_int);
-    ClassDB::bind_method(D_METHOD("set_property_float", "signalName", "property", "value"), &IOMapper::set_property_float);
-    ClassDB::bind_method(D_METHOD("set_property_double", "signalName", "property", "value"), &IOMapper::set_property_double);
-    ClassDB::bind_method(D_METHOD("get_property_int", "signalName", "property"), &IOMapper::get_property_int);
-    ClassDB::bind_method(D_METHOD("get_property_float", "signalName", "property"), &IOMapper::get_property_float);
-    ClassDB::bind_method(D_METHOD("get_property_double", "signalName", "property"), &IOMapper::get_property_double);
-    ClassDB::bind_method(D_METHOD("set_value_int", "signalName", "value"), &IOMapper::set_value_int);
-    ClassDB::bind_method(D_METHOD("set_value_float", "signalName", "value"), &IOMapper::set_value_float);
-    ClassDB::bind_method(D_METHOD("set_value_double", "signalName", "value"), &IOMapper::set_value_double);
-    ClassDB::bind_method(D_METHOD("set_value_vector2", "signalName", "values"), &IOMapper::set_value_vector2);
-    ClassDB::bind_method(D_METHOD("set_value_vector3", "signalName", "values"), &IOMapper::set_value_vector3);
-    ClassDB::bind_method(D_METHOD("get_value_int", "signalName"), &IOMapper::get_value_int);
-    ClassDB::bind_method(D_METHOD("get_value_float", "signalName"), &IOMapper::get_value_float);
-    ClassDB::bind_method(D_METHOD("get_value_double", "signalName"), &IOMapper::get_value_double);
-    ClassDB::bind_method(D_METHOD("get_value_vector2", "signalName"), &IOMapper::get_value_vector2);
-    ClassDB::bind_method(D_METHOD("get_value_vector3", "signalName"), &IOMapper::get_value_vector3);
+    
 
     // Direction enum constants
     BIND_ENUM_CONSTANT(INCOMING);
